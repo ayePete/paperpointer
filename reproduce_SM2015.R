@@ -58,22 +58,29 @@ score.supp <- function(accept_j,time_j,if_j,accept_k,time_k,if_k,T,tR,s){
 # Define function for total expected citations
 # Requires a submission pathway (jour_seq) and the acceptance rates (accept_seq),
 # time to decision (time_seq), and impact factor (if_seq) for each journal along
-# that pathway. This does not include their normalization constant q (eq. 1)
+# that pathway. qnew at j is basically the snippet of probability that your article
+# ends up in journal j, and all the qnew need to sum to 1 to get a true probability
+# distribution. This applies to "submissions" and "taccept" below, as well.
 # NB: in the original work (SM2015), eq. 1 contains sum(tau_j,k=1:j). This ought
 # to be sum(tau_k,k=1:j), no?
 citations <- function(jour_seq, accept_seq, time_seq, if_seq, T, tR, s){
   tot <- 0
-  j <- 1    # separate, to address the product
-  new <- accept_seq[j] * (if_seq[j]/365) * max(0, T-time_seq[j])
+  qtot <- 0   # normalization constant, to make this a real probability distribution
+  j <- 1      # separate, to address the product
+  qnew <- accept_seq[j]
+  new <- (if_seq[j]/365) * max(0, T-time_seq[j]) * qnew
   tot <- tot+new
+  qtot <- qtot+qnew
   if(length(jour_seq)>1){
     for (j in 2:length(jour_seq)){
-      new <- accept_seq[j] * (if_seq[j]/365) * max(0, T-sum(time_seq[1:j])-(j-1)*tR) *
-              prod( (1-accept_seq[1:(j-1)])*((1-s)^(time_seq[1:(j-1)]+tR)) )
+      qnew <- accept_seq[j] * prod( (1-accept_seq[1:(j-1)])*((1-s)^(time_seq[1:(j-1)]+tR)) )
+      new <- (if_seq[j]/365) * max(0, T-sum(time_seq[1:j])-(j-1)*tR) * qnew
       tot <- tot+new
+      qtot <- qtot+qnew
     }
   }
-  return(tot)
+  #return(tot)
+  return(tot/qtot)
 }
 
 # Define function for total expected submissions
@@ -82,12 +89,22 @@ citations <- function(jour_seq, accept_seq, time_seq, if_seq, T, tR, s){
 # not include their normalization constant q (eq. 4)
 submissions <- function(jour_seq, accept_seq, time_seq, T, tR, s){
   tot <- 0
-  for (j in 1:length(jour_seq)){
-    new <- j * accept_seq[j] * prod( (1-accept_seq[1:(j-1)])*((1-s)^(time_seq[1:(j-1)]+tR)) ) *
-            0.5*(sign( T - sum(time_seq[1:j]) - (j-1)*tR) + 1)
-    tot <- tot+new
+  qtot <- 0   # normalization constant, to make this a real probability distribution
+  j <- 1      # separate, to address the product
+  qnew <- accept_seq[j]
+  new <- j * 0.5*(sign(T-time_seq[1]) + 1) * qnew
+  tot <- tot+new
+  qtot <- qtot+qnew
+  if(length(jour_seq)>1){
+    for (j in 2:length(jour_seq)){
+      qnew <- accept_seq[j] * prod( (1-accept_seq[1:(j-1)])*((1-s)^(time_seq[1:(j-1)]+tR)) )
+      new <- j * 0.5*(sign( T - sum(time_seq[1:j]) - (j-1)*tR) + 1) * qnew
+      tot <- tot+new
+      qtot <- qtot+qnew
+    }
   }
-  return(tot)
+  #return(tot)
+  return(tot/qtot)
 }
 
 # Define function for total expected time to acceptance
@@ -96,17 +113,22 @@ submissions <- function(jour_seq, accept_seq, time_seq, T, tR, s){
 # that pathway. This does not include their normalization constant q (eq. 5)
 taccept <- function(jour_seq, accept_seq, time_seq, T, tR, s){
   tot <- 0
-  j <- 1    # separate, to address the product
-  new <- time_seq[j] * accept_seq[j] * 0.5*(sign(T-time_seq[j])+1)
+  qtot <- 0   # normalization constant, to make this a real probability distribution
+  j <- 1      # separate, to address the product
+  qnew <- accept_seq[j]
+  new <- time_seq[j] * 0.5*(sign(T-time_seq[j])+1) * qnew
   tot <- tot+new
+  qtot <- qtot+qnew
   if(length(jour_seq)>1){
-    for (j in 1:length(jour_seq)){
-      new <- (time_seq[j]+(j-1)*tR) * accept_seq[j] * 0.5*(sign(T-sum(time_seq[1:j])-(j-1)*tR)+1) *
-              prod( (1-accept_seq[1:(j-1)])*((1-s)^(time_seq[1:(j-1)]+tR)) )
+    for (j in 2:length(jour_seq)){
+      qnew <- accept_seq[j] * prod( (1-accept_seq[1:(j-1)])*((1-s)^(time_seq[1:(j-1)]+tR)) )
+      new <- (time_seq[j]+(j-1)*tR) * 0.5*(sign(T-sum(time_seq[1:j])-(j-1)*tR)+1) * qnew
       tot <- tot+new
+      qtot <- qtot+qnew
     }
   }
-  return(tot)
+  #return(tot)
+  return(tot/qtot)
 }
 
 # calculate their V_j (equation 3)
@@ -195,8 +217,8 @@ subs <- mat.or.vec(nchain,niter)      # to hold the expected number of submissio
 tacc <- mat.or.vec(nchain,niter)      # to hold the expected time in review for each pathway
 
 # sample indices for first journal
-#first <- as.vector(t(matrix(rep(indices,ceiling(nchain/N)),ncol=ceiling(nchain/N))))
-first <- rep(46,length(first))
+first <- as.vector(t(matrix(rep(indices,ceiling(nchain/N)),ncol=ceiling(nchain/N))))
+#first <- rep(46,length(first))
 
 # sample indices for second journal
 second <- rep(NA,nchain)
@@ -211,9 +233,9 @@ for (n in 1:nchain){
   jseq[n,1,3:N] <- sample(indices[-jseq[n,1,1:2]],size=N-2,replace=FALSE)
 }
 # Test sampling second through end journals
-for (n in 1:nchain){
-  jseq[n,1,2:N] <- sample(indices[-jseq[n,1,1]],size=N-1,replace=FALSE)
-}
+#for (n in 1:nchain){
+#  jseq[n,1,2:N] <- sample(indices[-jseq[n,1,1]],size=N-1,replace=FALSE)
+#}
 
 # for each chain, propose niter sequence swaps. accept with probability
 # alpha = (C.prop/C.curr)*(R.curr/R.prop)
