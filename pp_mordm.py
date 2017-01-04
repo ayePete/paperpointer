@@ -57,12 +57,12 @@ def tot_accept_time(accept_probs,
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
     within_horizon = within_horizon.astype(float)
     within_horizon = np.floor(within_horizon)
-    expected_time = np.sum(time_before_decision*cum_accept_prob*within_horizon)/np.sum(cum_accept_prob*within_horizon)
+    expected_time = np.sum(np.cumsum(time_before_decision)*cum_accept_prob*within_horizon)/np.sum(cum_accept_prob*within_horizon)
     return expected_time
 
 # paperpointer model for expected citations (C), submissions (R), time under review (P)
 def paperpointer(r,             # vector of weights for each element of journal data
-                 T = 5*365,     # time horizon over which we care about citations (days)
+                 T = 2*365,     # time horizon over which we care about citations (days)
                  tR = 30,       # time for each revision (days)
                  s = 0.001):    # scooping probability
     
@@ -100,12 +100,12 @@ model.constraints = []
 model.levers = [RealLever("r",min_value=-1,max_value=1,length=3)]
 
 # optimize using NSGAII
-output = optimize(model,"NSGAII",100000)
+output = optimize(model,"NSGAII",10000)
 print("Found " + str(len(output)) + " optimal policies!")
 
 # write Pareto optimal solutions to csv
 output_df = output.as_dataframe()
-output_df.to_csv("policies.csv",sep=',')    
+output_df.to_pickle('policies-T2')    
 
 fig = scatter2d(model, output)
 plt.show()
