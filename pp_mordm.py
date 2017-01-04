@@ -100,7 +100,7 @@ model.constraints = []
 model.levers = [RealLever("r",min_value=-1,max_value=1,length=3)]
 
 # optimize using NSGAII
-output = optimize(model,"NSGAII",10000)
+output = optimize(model,"NSGAII",100000)
 print("Found " + str(len(output)) + " optimal policies!")
 
 # write Pareto optimal solutions to csv

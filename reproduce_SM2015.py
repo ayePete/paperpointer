@@ -97,7 +97,7 @@ def tot_accept_time(accept_probs,
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
     within_horizon = within_horizon.astype(float)
     within_horizon = np.floor(within_horizon)
-    expected_time = np.sum(time_before_decision*cum_accept_prob*within_horizon)/np.sum(cum_accept_prob*within_horizon)
+    expected_time = np.sum(np.cumsum(time_before_decision)*cum_accept_prob*within_horizon)/np.sum(cum_accept_prob*within_horizon)
     return expected_time
 
 # Model 2: multi-objective analysis of the three objectives
@@ -171,7 +171,7 @@ data = xls.parse(xls.sheet_names[0])  # read in data as pandas dataframe
 
 n_journals = data.shape[0]
 n_chains = n_journals*(n_journals-1)    # generate a chain for each combination of first two journals
-n_iter = 100  # number of proposals for each chain
+n_iter = 1000  # number of proposals for each chain
 
 # set time horizon (T) in days, revision time (tR) in days, scooping probability (s)
 T = 5*365
