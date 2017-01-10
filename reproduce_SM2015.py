@@ -204,7 +204,7 @@ print('\r Saving to netCDF...')
 var_names = {}
 new_var_names = ["j%d" % number for number in np.arange(chain_len)]
 new_var_names.extend(['Citations','Submissions','Review Time'])
-old_var_names = [number for number in np.arange(n_journals)]
+old_var_names = [number for number in np.arange(chain_len)]
 old_var_names.extend(['Citations', 'Submissions', 'Time'])
 all_var_names = zip(old_var_names,new_var_names)
 for old, new in all_var_names:
