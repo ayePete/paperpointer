@@ -8,8 +8,11 @@ import pandas as pd
 import xarray as xr
 import sys
 import random
+from platypus import *
 from rhodium import *
 import timeit
+from brewer2mpl import qualitative
+import seaborn as sns
 
 random.seed(0)
 
@@ -74,11 +77,12 @@ def paperpointer(j_seq,         # sequence of journals to be evaluated,
     accept_probs = np.array([j_data[s]['AcceptRate'] for s in j_seq])
     dec_time = np.array([j_data[s]['SubToDecTime_days'] for s in j_seq])
     impact_factors = np.array([j_data[s]['IF_2012'] for s in j_seq])
-    exp_cite = citations(accept_probs,dec_time,impact_factors,T,tR,s)
-    exp_subs = submissions(accept_probs,dec_time,T,tR,s)
-    exp_review_time = tot_accept_time(accept_probs,dec_time,T,tR,s)
+    expected_citations = citations(accept_probs,dec_time,impact_factors,T,tR,s)
+    expected_submissions = submissions(accept_probs,dec_time,T,tR,s)
+    expected_review_time = tot_accept_time(accept_probs,dec_time,T,tR,s)
+    first_journal = data_pd[data_pd['Journal'] == j_seq[0]].index[0]
     
-    return (exp_cite,exp_subs,exp_review_time)
+    return (expected_citations,expected_submissions,expected_review_time)
 
 # load journal data
 # read data from excel file. change path to appropriate paperpointer path for file system
@@ -100,28 +104,59 @@ model.parameters = [Parameter("j_seq"),
                     Parameter("tR"),
                     Parameter("s")]
 
-model.responses = [Response("exp_cite",Response.MAXIMIZE),
-                   Response("exp_subs",Response.MINIMIZE),
-                   Response("exp_review_time",Response.MINIMIZE)]
+model.responses = [Response("expected_citations",Response.MAXIMIZE),
+                   Response("expected_submissions",Response.MINIMIZE),
+                   Response("expected_review_time",Response.MINIMIZE)]
 
 # specify model Lever
 model.levers = [SubsetLever("j_seq",options=j_data.keys(),size=5)]
 
 # optimize using NSGAII
-output = optimize(model,"NSGAII",1000000)
+output = optimize(model,"NSGAII",100000,archive=EpsilonBoxArchive(0.01))
 print("Found " + str(len(output)) + " optimal policies!")
 print(output)
 
-# write Pareto optimal solutions to csv
-output_df = output.as_dataframe()
-output_xr = xr.Dataset.from_dataframe(output_df)
-output_xr.to_netcdf('chains-Rhodium-'+str(T0)+'.nc',mode='w')    
-
-fig = scatter2d(model, output)
-plt.show()
-
-fig = parallel_coordinates(model, output, colormap="rainbow", target="top")
-plt.show()
-
 stop = timeit.default_timer()
 print("Runtime: " + str(stop-start) + " seconds")
+
+# write Pareto optimal solutions to csv
+output_df = output.as_dataframe()
+output_df = pd.concat([output_df['j_seq'].apply(pd.Series),output_df.drop('j_seq',axis=1)],axis=1)
+output_xr = xr.Dataset.from_dataframe(output_df)
+var_names = {}
+new_var_names = ["j%d" % number for number in np.arange(5)]
+new_var_names.extend(['Citations','Submissions','Review Time'])
+old_var_names = [number for number in np.arange(5)]
+old_var_names.extend(['expected_citations', 'expected_submissions','expected_review_time'])
+all_var_names = zip(old_var_names,new_var_names)
+for old, new in all_var_names:
+    var_names[old] = new
+
+output_xr.rename(var_names,inplace=True)
+
+output_xr.to_netcdf('chains-Rhodium-'+str(T0)+'.nc',mode='w')    
+
+# get color map
+unique_j0 = list(output_df[0].unique())
+unique_count = len(unique_j0)
+hex_colors = sns.color_palette('Set1',unique_count).as_hex()
+color_zip = zip(unique_j0,hex_colors)
+j_colors = {}
+for journal,color in color_zip:
+    j_colors[journal] = color
+
+output.apply("first_journal = j_seq[0]")
+
+sns.set_style('dark')
+fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_submissions')
+plt.show()
+
+fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_review_time')
+plt.show()
+
+fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_submissions',y='expected_review_time')
+plt.show()
+
+fig = parallel_coordinates(model, output, target="top", c="first_journal", colors=j_colors)
+plt.show()
+
