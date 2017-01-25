@@ -68,6 +68,20 @@ def tot_accept_time(accept_probs,
     expected_time = np.sum(np.cumsum(time_before_decision)*cum_accept_prob*within_horizon)/np.sum(cum_accept_prob*within_horizon)
     return expected_time
 
+def citations_per_time(accept_probs,
+                       accept_times,
+                       impact_factors,
+                       T,
+                       tR = 30,
+                       s = 0.001):
+    impact_factors = impact_factors/365 # convert IFs to a measure of expected citations per day
+    submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
+    cum_accept_prob = accept_probs*np.cumprod(submit_prob)
+    time_before_decision = accept_times+tR
+    time_before_decision[0] -= tR
+    expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)/np.sum(cum_accept_prob)
+
+
 # paperpointer model for expected citations (C), submissions (R), time under review (P)
 def paperpointer(j_seq,         # sequence of journals to be evaluated,
                  T,             # time horizon over which we care about citations (days)
@@ -89,7 +103,7 @@ def paperpointer(j_seq,         # sequence of journals to be evaluated,
 os.chdir('d:\\research\\paperpointer')  # change working directory to main paperpointer directory
 
 T0 = int(sys.argv[1])
-
+NFE = int(sys.argv[2])
 start = timeit.default_timer()
 
 xls = pd.ExcelFile('data/Salinas_Munch_2015_S1_Table.xlsx') # open excel data file using pandas
@@ -112,7 +126,7 @@ model.responses = [Response("expected_citations",Response.MAXIMIZE),
 model.levers = [SubsetLever("j_seq",options=j_data.keys(),size=5)]
 
 # optimize using NSGAII
-output = optimize(model,"NSGAII",100000,archive=EpsilonBoxArchive(0.01))
+output = optimize(model,"NSGAII",NFE,archive=EpsilonBoxArchive(0.01))
 print("Found " + str(len(output)) + " optimal policies!")
 print(output)
 
@@ -134,12 +148,12 @@ for old, new in all_var_names:
 
 output_xr.rename(var_names,inplace=True)
 
-output_xr.to_netcdf('chains-Rhodium-'+str(T0)+'.nc',mode='w')    
+output_xr.to_netcdf('chains-Rhodium-'+str(T0)+'-'+str(NFE)+'.nc',mode='w')    
 
 # get color map
 unique_j0 = list(output_df[0].unique())
 unique_count = len(unique_j0)
-hex_colors = sns.color_palette('Set1',unique_count).as_hex()
+hex_colors = sns.color_palette('husl',unique_count).as_hex()
 color_zip = zip(unique_j0,hex_colors)
 j_colors = {}
 for journal,color in color_zip:
@@ -157,6 +171,7 @@ plt.show()
 fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_submissions',y='expected_review_time')
 plt.show()
 
+sns.set_style('dark')
 fig = parallel_coordinates(model, output, target="top", c="first_journal", colors=j_colors)
 plt.show()
 
