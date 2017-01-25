@@ -30,7 +30,10 @@ def citations(accept_probs,     # array of acceptance probabilities for each jou
     time_before_decision = accept_times+tR
     time_before_decision[0] -= tR
     remaining_citation_time = np.maximum(T-np.cumsum(time_before_decision),0)
-    expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)/np.sum(cum_accept_prob)
+    if np.sum(cum_accept_prob) >= 1:
+        expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)/np.sum(cum_accept_prob)
+    else:
+        expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)
     return expected_citations
 
 # compute expected number of submissions over time horizon for a journal submission pathway
@@ -85,36 +88,52 @@ def citations_per_time(accept_probs,
 # paperpointer model for expected citations (C), submissions (R), time under review (P)
 def paperpointer(j_seq,         # sequence of journals to be evaluated,
                  T,             # time horizon over which we care about citations (days)
+                 j_data,     # journal data dictionary
                  tR = 30,       # time for each revision (days)
-                 s = 0.001):    # scooping probability
-    
-    accept_probs = np.array([j_data[s]['AcceptRate'] for s in j_seq])
-    dec_time = np.array([j_data[s]['SubToDecTime_days'] for s in j_seq])
-    impact_factors = np.array([j_data[s]['IF_2012'] for s in j_seq])
-    expected_citations = citations(accept_probs,dec_time,impact_factors,T,tR,s)
-    expected_submissions = submissions(accept_probs,dec_time,T,tR,s)
-    expected_review_time = tot_accept_time(accept_probs,dec_time,T,tR,s)
-    first_journal = data_pd[data_pd['Journal'] == j_seq[0]].index[0]
+                 s = 0.001):     # scooping probability
+    if j_data[j_seq[4]]['AcceptRate'] < 50:
+        expected_citations = 0
+        expected_submissions = 10
+        expected_review_time = 1000
+    else:
+        j_seq_dict = {jour: j_data.get(jour,None) for jour in j_seq}
+        IF_seq = [j_seq_dict[jour]['IF_2012'] for jour in j_seq]
+        IF_diff = [t - s for s,t in zip(IF_seq,IF_seq[1:])]
+        if max(IF_diff) > 5:
+            expected_citations = 0
+            expected_submissions = 10
+            expected_review_time = 1000
+        else:
+            accept_probs = np.array([j_data[jour]['AcceptRate'] for jour in j_seq])
+            dec_time = np.array([j_data[jour]['SubToDecTime_days'] for jour in j_seq])
+            impact_factors = np.array([j_data[jour]['IF_2012'] for jour in j_seq])
+            expected_citations = citations(accept_probs,dec_time,impact_factors,T,tR,s)
+            expected_submissions = submissions(accept_probs,dec_time,T,tR,s)
+            expected_review_time = tot_accept_time(accept_probs,dec_time,T,tR,s)
     
     return (expected_citations,expected_submissions,expected_review_time)
 
 # load journal data
 # read data from excel file. change path to appropriate paperpointer path for file system
-os.chdir('d:\\research\\paperpointer')  # change working directory to main paperpointer directory
-
-T0 = int(sys.argv[1])
-NFE = int(sys.argv[2])
-start = timeit.default_timer()
+os.chdir('d:/research/paperpointer')  # change working directory to main paperpointer directory
 
 xls = pd.ExcelFile('data/Salinas_Munch_2015_S1_Table.xlsx') # open excel data file using pandas
 data_pd = xls.parse(xls.sheet_names[0])  # read in data as pandas dataframe
 j_data = data_pd.set_index('Journal').to_dict(orient='index')
 
+array_ind = int(sys.argv[1])
+param_array = [[3,100000],[7,10000]]
+
+T0 = param_array[array_ind][0]
+NFE = param_array[array_ind][1]
+start = timeit.default_timer()
+    
 # define model for rhodium
 model = Model(paperpointer)
 
 model.parameters = [Parameter("j_seq"),
                     Parameter("T", default_value = T0*365),
+                    Parameter("j_data", default_value=j_data),
                     Parameter("tR"),
                     Parameter("s")]
 
@@ -162,13 +181,13 @@ for journal,color in color_zip:
 output.apply("first_journal = j_seq[0]")
 
 sns.set_style('dark')
-fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_submissions')
+fig = scatter2d(model, output,c="first_journal",s=None,is_class=True,colors=j_colors,x='expected_citations',y='expected_submissions')
 plt.show()
 
-fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_review_time')
+fig = scatter2d(model, output,c="first_journal",s=None,is_class=True,colors=j_colors,x='expected_citations',y='expected_review_time')
 plt.show()
 
-fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_submissions',y='expected_review_time')
+fig = scatter2d(model, output,c="first_journal",s=None,is_class=True,colors=j_colors,x='expected_submissions',y='expected_review_time')
 plt.show()
 
 sns.set_style('dark')
