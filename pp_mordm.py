@@ -87,13 +87,14 @@ def citations_per_time(accept_probs,
 
 # paperpointer model for expected citations (C), submissions (R), time under review (P)
 def paperpointer(j_seq,         # sequence of journals to be evaluated,
-                 T,             # time horizon over which we care about citations (days)
+                 T,             # time horizon over which we care about citations (days),
+                 j_data = j_data,        # journal data as dictionary indexed by name
                  tR = 30,       # time for each revision (days)
                  s = 0.001):    # scooping probability
     
-    accept_probs = np.array([j_data[s]['AcceptRate'] for s in j_seq])
-    dec_time = np.array([j_data[s]['SubToDecTime_days'] for s in j_seq])
-    impact_factors = np.array([j_data[s]['IF_2012'] for s in j_seq])
+    accept_probs = np.array([j_data[jour]['AcceptRate'] for jour in j_seq])
+    dec_time = np.array([j_data[jour]['SubToDecTime_days'] for jour in j_seq])
+    impact_factors = np.array([j_data[jour]['IF_2012'] for jour in j_seq])
     expected_citations = citations(accept_probs,dec_time,impact_factors,T,tR,s)
     expected_submissions = submissions(accept_probs,dec_time,T,tR,s)
     expected_review_time = tot_accept_time(accept_probs,dec_time,T,tR,s)
@@ -125,6 +126,7 @@ model = Model(paperpointer)
 
 model.parameters = [Parameter("j_seq"),
                     Parameter("T", default_value = T0*365),
+                    Parameter("j_data"),
                     Parameter("tR"),
                     Parameter("s")]
 
@@ -161,27 +163,27 @@ output_xr.rename(var_names,inplace=True)
 output_xr.to_netcdf('chains-Rhodium-'+str(T0)+'-'+str(NFE)+'.nc',mode='w')    
 
 # get color map
-unique_j0 = list(output_df[0].unique())
-unique_count = len(unique_j0)
-hex_colors = sns.color_palette('husl',unique_count).as_hex()
-color_zip = zip(unique_j0,hex_colors)
-j_colors = {}
-for journal,color in color_zip:
-    j_colors[journal] = color
+# unique_j0 = list(output_df[0].unique())
+# unique_count = len(unique_j0)
+# hex_colors = sns.color_palette('husl',unique_count).as_hex()
+# color_zip = zip(unique_j0,hex_colors)
+# j_colors = {}
+# for journal,color in color_zip:
+#     j_colors[journal] = color
 
-output.apply("first_journal = j_seq[0]")
-
-sns.set_style('dark')
-fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_submissions')
-plt.show()
-
-fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_review_time')
-plt.show()
-
-fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_submissions',y='expected_review_time')
-plt.show()
-
-sns.set_style('dark')
-fig = parallel_coordinates(model, output, target="top", c="first_journal", colors=j_colors)
-plt.show()
+# output.apply("first_journal = j_seq[0]")
+# 
+# sns.set_style('dark')
+# fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_submissions')
+# plt.show()
+# 
+# fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_citations',y='expected_review_time')
+# plt.show()
+# 
+# fig = scatter2d(model, output,c="first_journal",is_class=True,colors=j_colors,x='expected_submissions',y='expected_review_time')
+# plt.show()
+# 
+# sns.set_style('dark')
+# fig = parallel_coordinates(model, output, target="top", c="first_journal", colors=j_colors)
+# plt.show()
 
