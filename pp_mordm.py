@@ -30,7 +30,10 @@ def citations(accept_probs,     # array of acceptance probabilities for each jou
     time_before_decision = accept_times+tR
     time_before_decision[0] -= tR
     remaining_citation_time = np.maximum(T-np.cumsum(time_before_decision),0)
-    expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)/np.sum(cum_accept_prob)
+    if np.sum(cum_accept_prob) >= 1:
+        expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)/np.sum(cum_accept_prob)
+    else:
+        expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)
     return expected_citations
 
 # compute expected number of submissions over time horizon for a journal submission pathway
