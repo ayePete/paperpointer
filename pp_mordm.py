@@ -103,10 +103,17 @@ def paperpointer(j_seq,         # sequence of journals to be evaluated,
 
 # load journal data
 # read data from excel file. change path to appropriate paperpointer path for file system
-os.chdir('d:\\research\\paperpointer')  # change working directory to main paperpointer directory
+#os.chdir('d:\\research\\paperpointer')  # change working directory to main paperpointer directory
 
-T0 = int(sys.argv[1])
-NFE = int(sys.argv[2])
+param_array = [[3,10000],[3,100000],[3,1000000],[3,5000000],[3,10000000],[7,10000000],[20,10000000]]
+
+# get array index to look up T0 and NFE
+array_ind = int(os.getenv('PBS_ARRAYID'))
+
+T0 = param_array[array_ind][0])
+NFE = param_array[array_ind][1]
+
+# start timer
 start = timeit.default_timer()
 
 xls = pd.ExcelFile('data/Salinas_Munch_2015_S1_Table.xlsx') # open excel data file using pandas
