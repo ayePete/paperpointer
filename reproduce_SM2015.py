@@ -10,7 +10,7 @@ import sys
 import timeit
 import random
 
-random.seed(1)
+random.seed(0)
 
 # show progress bar (from Stack Overflow's Vladimir Ignatyev)
 def progress(count, total, suffix=''):
@@ -179,15 +179,8 @@ def generate_chains(T,          # time horizon over which we care about citation
     # merge chains and objectives for return    
     df = pd.concat([chains,objs],axis=1)
     return df
-
-param_array = [[3,10000],[3,100000],[3,1000000],[3,5000000],[3,10000000]]
-
-# get array index to look up T0 and NFE
-array_ind = int(os.getenv('PBS_ARRAYID'))
-
-T0 = param_array[array_ind][0])
-NFE = param_array[array_ind][1]
-
+    
+T0 = int(sys.argv[1])
 # start timer
 start = timeit.default_timer()
 
@@ -198,7 +191,7 @@ data = xls.parse(xls.sheet_names[0])  # read in data as pandas dataframe
 
 n_journals = data.shape[0]
 n_chains = n_journals*(n_journals-1)    # generate a chain for each combination of first two journals
-n_iter = int(np.ceil(NFE/n_chains))  # number of proposals for each chain
+n_iter = 10000  # number of proposals for each chain
 chain_len = 5
 
 # set time horizon (T) in days, revision time (tR) in days, scooping probability (s)
