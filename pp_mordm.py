@@ -42,7 +42,6 @@ def submissions(accept_probs,   # array of acceptance probabilities for each jou
     
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
-    cum_accept_prob[-1] = 1-np.sum(cum_accept_prob[:-1])
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
@@ -50,7 +49,7 @@ def submissions(accept_probs,   # array of acceptance probabilities for each jou
     within_horizon = np.floor(within_horizon)
     sub_max = np.nonzero(within_horizon)[0][-1]+1
     num_submissions = np.arange(1,np.size(accept_probs)+1)
-    expected_submissions = np.sum(np.minimum(sub_max,num_submissions)*cum_accept_prob)
+    expected_submissions = np.sum(num_submissions[:sub_max]*cum_accept_prob[:sub_max])+sub_max*(1-np.sum(cum_accept_prob[:sub_max]))
     return expected_submissions
 
 # compute expected time until paper is accepted for a journal submission pathway
@@ -62,10 +61,13 @@ def tot_accept_time(accept_probs,
     
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
-    cum_accept_prob[-1] = 1-np.sum(cum_accept_prob[:-1])
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR
-    expected_time = np.sum(np.minimum(T,np.cumsum(time_before_decision))*cum_accept_prob)
+    within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
+    within_horizon = within_horizon.astype(float)
+    within_horizon = np.floor(within_horizon)
+    sub_max = np.nonzero(within_horizon)[0][-1]+1
+    expected_time = np.sum(time_before_decision[:sub_max]*cum_accept_prob[:sub_max])+T*(1-np.sum(cum_accept_prob[:sub_max]))
     return expected_time
 
 # compute probability of not being accepted by any journal, including scooping
@@ -105,7 +107,7 @@ def paperpointer(j_seq,         # sequence of journals to be evaluated,
 # read data from excel file. change path to appropriate paperpointer path for file system
 #os.chdir('d:\\research\\paperpointer')  # change working directory to main paperpointer directory
 
-param_array = [[3,10000000],[7,10000000],[20,10000000]]
+param_array = [[3,10000],[3,100000],[3,1000000],[3,10000000],[7,10000000],[20,10000000]]
 
 # get array index to look up T0 and NFE
 array_ind = int(os.getenv('PBS_ARRAYID'))

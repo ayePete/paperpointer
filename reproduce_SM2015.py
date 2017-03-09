@@ -12,6 +12,22 @@ import random
 
 random.seed(0)
 
+def is_pareto_efficient(costs,orientation):
+    """
+    :param costs: An (n_points, n_costs) array
+    :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
+    """
+    is_efficient = np.ones(costs.shape[0], dtype = bool)
+    for i, o in enumerate(orientation):
+        if o == 'Maximize':
+            costs[:,i] *= -1
+    
+    for i, c in enumerate(costs):
+        if is_efficient[i]:
+            is_efficient[is_efficient] = np.any(costs[is_efficient]<=c, axis=1)  # Remove dominated points
+    return is_efficient
+    
+
 # show progress bar (from Stack Overflow's Vladimir Ignatyev)
 def progress(count, total, suffix=''):
     bar_len = 60
@@ -83,8 +99,9 @@ def submissions(accept_probs,   # array of acceptance probabilities for each jou
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
     within_horizon = within_horizon.astype(float)
     within_horizon = np.floor(within_horizon)
+    sub_max = np.nonzero(within_horizon)[0][-1]+1
     num_submissions = np.arange(1,np.size(accept_probs)+1)
-    expected_submissions = np.sum(num_submissions*cum_accept_prob*within_horizon)/np.sum(cum_accept_prob*within_horizon)
+    expected_submissions = np.sum(num_submissions[:sub_max]*cum_accept_prob[:sub_max])+sub_max*(1-np.sum(cum_accept_prob[:sub_max]))
     return expected_submissions
 
 # compute expected time until paper is accepted for a journal submission pathway
@@ -101,7 +118,8 @@ def tot_accept_time(accept_probs,
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
     within_horizon = within_horizon.astype(float)
     within_horizon = np.floor(within_horizon)
-    expected_time = np.sum(np.cumsum(time_before_decision)*cum_accept_prob*within_horizon)/np.sum(cum_accept_prob*within_horizon)
+    sub_max = np.nonzero(within_horizon)[0][-1]+1
+    expected_time = np.sum(time_before_decision[:sub_max]*cum_accept_prob[:sub_max])+T*(1-np.sum(cum_accept_prob[:sub_max]))
     return expected_time
 
 # Model 2: multi-objective analysis of the three objectives
@@ -180,7 +198,13 @@ def generate_chains(T,          # time horizon over which we care about citation
     df = pd.concat([chains,objs],axis=1)
     return df
     
-T0 = int(sys.argv[1])
+param_array = [[3,10000],[3,100000],[3,1000000],[3,5000000],[3,10000000]]
+
+# get array index to look up T0 and NFE
+array_ind = int(os.getenv('PBS_ARRAYID'))
+
+T0 = param_array[array_ind][0]
+NFE = param_array[array_ind][1]
 # start timer
 start = timeit.default_timer()
 
@@ -191,7 +215,7 @@ data = xls.parse(xls.sheet_names[0])  # read in data as pandas dataframe
 
 n_journals = data.shape[0]
 n_chains = n_journals*(n_journals-1)    # generate a chain for each combination of first two journals
-n_iter = 10000  # number of proposals for each chain
+n_iter = int(np.ceil(NFE/n_chains))  # number of proposals for each chain
 chain_len = 5
 
 # set time horizon (T) in days, revision time (tR) in days, scooping probability (s)
@@ -201,6 +225,11 @@ s = 0.001
 
 # generate submission chains
 df = generate_chains(T,tR,s,data,n_chains,chain_len,n_iter)
+
+orient = ['Maximize','Minimize','Minimize']
+cols = ['Citations','Submissions','Time']
+eff = is_pareto_efficient(df[cols].as_matrix(), orient)
+df = df[eff]
 # write data frame to netcdf
 df_xr = xr.Dataset.from_dataframe(df)
 # Turn variable names into strings for netCDF writing
@@ -216,7 +245,9 @@ for old, new in all_var_names:
 
 df_xr.rename(var_names,inplace=True)
 
-df_xr.to_netcdf('chains-'+str(T0)+'.nc',mode='w')
+
+
+df_xr.to_netcdf('MH-'+str(T0)+'-'+str(NFE)+'.nc',mode='w')
 
 # end timer and print runtime
 stop = timeit.default_timer()
