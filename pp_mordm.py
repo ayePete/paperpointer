@@ -1,5 +1,5 @@
-## model for Python MORDM version of optimal journal submission pathways
-## Vivek Srikrishnan (srikrish@psu.edu)
+# model for Python MORDM version of optimal journal submission pathways
+# Vivek Srikrishnan (srikrish@psu.edu)
 
 
 import numpy as np
@@ -13,6 +13,7 @@ from rhodium import *
 import timeit
 
 random.seed(1)
+
 
 # compute expected citations over time horizon for a journal submission pathway
 def citations(accept_probs,     # array of acceptance probabilities for each journal in pathway
@@ -33,15 +34,46 @@ def citations(accept_probs,     # array of acceptance probabilities for each jou
     else:
         expected_citations = np.sum(impact_factors*remaining_citation_time*cum_accept_prob)
     return expected_citations
-    
-def submissions(accept_probs,   # array of acceptance probabilities for each journal in pathway
-                accept_times,   # array of expected times until publication for each journal in pathway
+
+
+def prestige(exp_accept_probs,
+             exp_accept_times,
+             impact_factors,
+             T,
+             tR,
+             s,
+             theta):
+
+    impact_factors = impact_factors/365 # convert IFs to a measure of expected citations per day
+    # compute acceptance probabilities as a function of paper quality
+    accept_probs = (exp_accept_probs*theta)/((2*exp_accept_probs-1)*theta-exp_accept_probs+1)
+    # compute probability of submitting to each journal
+    submit_prob = np.insert((1 - accept_probs[:-1]) * np.power(1 - s, accept_times[:-1] + tR), 0, 1)
+    cum_accept_prob = accept_probs * np.cumprod(submit_prob)
+    # compute time under review as a function of paper quality
+    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
+    time_before_decision = accept_times+tR
+    time_before_decision[0] -= tR
+    remaining_time = np.maximum(T-np.cumsum(time_before_decision),0)
+    if np.sum(cum_accept_prob) >= 1:
+        expected_prestige = np.sum(impact_factors*np.sign(remaining_time)*cum_accept_prob)/np.sum(cum_accept_prob)
+    else:
+        expected_prestige = np.sum(impact_factors*np.sign(remaining_time)*cum_accept_prob)
+    return expected_prestige
+
+
+def submissions(exp_accept_probs,   # array of acceptance probabilities for each journal in pathway
+                exp_accept_times,   # array of expected times until publication for each journal in pathway
                 T,              # time horizon over which we care about citations
                 tR,             # time for each revision
-                s):             # scooping probability
-    
+                s,             # scooping probability
+                theta):         # paper quality
+    # compute acceptance probabilities as a function of paper quality
+    accept_probs = (exp_accept_probs * theta) / ((2 * exp_accept_probs - 1) * theta - exp_accept_probs + 1)
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
+    # compute time under review as a function of paper quality
+    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
@@ -52,15 +84,20 @@ def submissions(accept_probs,   # array of acceptance probabilities for each jou
     expected_submissions = np.sum(num_submissions[:sub_max]*cum_accept_prob[:sub_max])+sub_max*(1-np.sum(cum_accept_prob[:sub_max]))
     return expected_submissions
 
+
 # compute expected time until paper is accepted for a journal submission pathway
-def tot_accept_time(accept_probs,
-                    accept_times,
+def tot_accept_time(exp_accept_probs,
+                    exp_accept_times,
                     T,
                     tR,
-                    s):
-    
+                    s,
+                    theta):
+    # compute acceptance probabilities as a function of paper quality
+    accept_probs = (exp_accept_probs * theta) / ((2 * exp_accept_probs - 1) * theta - exp_accept_probs + 1)
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
+    # compute time under review as a function of paper quality
+    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
@@ -71,13 +108,18 @@ def tot_accept_time(accept_probs,
     return expected_time
 
 # compute probability of not being accepted by any journal, including scooping
-def rejection_probability(accept_probs,
-                          accept_times,
+def rejection_probability(exp_accept_probs,
+                          exp_accept_times,
                           T,
                           tR,
-                          s):
+                          s,
+                          theta):
+    # compute acceptance probabilities as a function of paper quality
+    accept_probs = (exp_accept_probs * theta) / ((2 * exp_accept_probs - 1) * theta - exp_accept_probs + 1)
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
+    # compute time under review as a function of paper quality
+    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR 
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
@@ -87,33 +129,36 @@ def rejection_probability(accept_probs,
     reject_prob = 1-np.sum(cum_accept_prob[:sub_max])
     return reject_prob
 
+
 # paperpointer model for expected citations (C), submissions (R), time under review (P)
 def paperpointer(j_seq,         # sequence of journals to be evaluated,
                  T,             # time horizon over which we care about citations (days),
                  j_data,        # journal data as dictionary indexed by name
                  tR = 30,       # time for each revision (days)
-                 s = 0.001):    # scooping probability
+                 s = 0.001,     # scooping probability
+                 theta = 0.5):  # paper quality
     
     accept_probs = np.array([j_data[jour]['AcceptRate'] for jour in j_seq])
     dec_time = np.array([j_data[jour]['SubToDecTime_days'] for jour in j_seq])
     impact_factors = np.array([j_data[jour]['IF_2012'] for jour in j_seq])
-    expected_citations = citations(accept_probs,dec_time,impact_factors,T,tR,s)
-    expected_submissions = submissions(accept_probs,dec_time,T,tR,s)
-    expected_review_time = tot_accept_time(accept_probs,dec_time,T,tR,s)
-    tot_accept_prob = 1-rejection_probability(accept_probs,dec_time,T,tR,s)
-    return (expected_citations,expected_submissions,expected_review_time,tot_accept_prob)
+    expected_prestige = prestige(accept_probs,dec_time,impact_factors,T,tR,s,theta)
+    expected_submissions = submissions(accept_probs,dec_time,T,tR,s,theta)
+    expected_review_time = tot_accept_time(accept_probs,dec_time,T,tR,s,theta)
+    tot_accept_prob = 1-rejection_probability(accept_probs,dec_time,T,tR,s,theta)
+    return expected_prestige,expected_submissions,expected_review_time,tot_accept_prob
 
 # load journal data
 # read data from excel file. change path to appropriate paperpointer path for file system
 #os.chdir('d:\\research\\paperpointer')  # change working directory to main paperpointer directory
 
-param_array = [[3,10000],[3,100000],[3,1000000],[3,10000000],[7,10000000],[20,10000000]]
+param_array = [[2,0.5],[2,0.25],[2,0.75]]
 
 # get array index to look up T0 and NFE
 array_ind = int(os.getenv('PBS_ARRAYID'))
 
 T0 = param_array[array_ind][0]
-NFE = param_array[array_ind][1]
+theta0 = param_array[array_ind][1]
+NFE = 10000000
 
 # start timer
 start = timeit.default_timer()
@@ -126,21 +171,22 @@ j_data = data_pd.set_index('Journal').to_dict(orient='index')
 model = Model(paperpointer)
 
 model.parameters = [Parameter("j_seq"),
-                    Parameter("T", default_value = T0*365),
+                    Parameter("T", default_value=T0*365),
                     Parameter("j_data", default_value=j_data),
                     Parameter("tR"),
-                    Parameter("s")]
+                    Parameter("s"),
+                    Parameter("theta", default_value=theta0)]
 
-model.responses = [Response("expected_citations",Response.MAXIMIZE),
-                   Response("expected_submissions",Response.MINIMIZE),
-                   Response("expected_review_time",Response.MINIMIZE),
-                   Response("tot_accept_prob",Response.INFO)]
+model.responses = [Response("expected_prestige", Response.MAXIMIZE),
+                   Response("expected_submissions", Response.MINIMIZE),
+                   Response("expected_review_time", Response.MINIMIZE),
+                   Response("tot_accept_prob", Response.INFO)]
 
 # specify model Lever
-model.levers = [SubsetLever("j_seq",options=j_data.keys(),size=5)]
+model.levers = [SubsetLever("j_seq", options=j_data.keys(), size=5)]
 
 # optimize using NSGAII
-output = optimize(model,"NSGAII",NFE)
+output = optimize(model, "NSGAII",NFE)
 print("Found " + str(len(output)) + " optimal policies!")
 print(output)
 
@@ -153,7 +199,7 @@ output_df = pd.concat([output_df['j_seq'].apply(pd.Series),output_df.drop(['j_se
 output_xr = xr.Dataset.from_dataframe(output_df)
 var_names = {}
 new_var_names = ["j%d" % number for number in np.arange(5)]
-new_var_names.extend(['Citations','Submissions','Review Time'])
+new_var_names.extend(['Prestige','Submissions','Review Time'])
 old_var_names = [number for number in np.arange(5)]
 old_var_names.extend(['expected_citations', 'expected_submissions','expected_review_time'])
 all_var_names = zip(old_var_names,new_var_names)
