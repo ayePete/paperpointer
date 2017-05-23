@@ -51,7 +51,7 @@ def prestige(exp_accept_probs,
     submit_prob = np.insert((1 - accept_probs[:-1]) * np.power(1 - s, accept_times[:-1] + tR), 0, 1)
     cum_accept_prob = accept_probs * np.cumprod(submit_prob)
     # compute time under review as a function of paper quality
-    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
+    accept_times = -4*exp_accept_times*(np.power(theta,2)-theta)
     time_before_decision = accept_times+tR
     time_before_decision[0] -= tR
     remaining_time = np.maximum(T-np.cumsum(time_before_decision),0)
@@ -73,7 +73,7 @@ def submissions(exp_accept_probs,   # array of acceptance probabilities for each
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
     # compute time under review as a function of paper quality
-    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
+    accept_times = -4*exp_accept_times*(np.power(theta,2)-theta)
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
@@ -97,7 +97,7 @@ def tot_accept_time(exp_accept_probs,
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
     # compute time under review as a function of paper quality
-    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
+    accept_times = -4*exp_accept_times*(np.power(theta,2)-theta)
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
@@ -119,7 +119,7 @@ def rejection_probability(exp_accept_probs,
     submit_prob = np.insert((1-accept_probs[:-1])*np.power(1-s,accept_times[:-1]+tR),0,1)
     cum_accept_prob = accept_probs*np.cumprod(submit_prob)
     # compute time under review as a function of paper quality
-    accept_times = 4*exp_accept_times*(np.power(theta,2)-theta)
+    accept_times = -4*exp_accept_times*(np.power(theta,2)-theta)
     time_before_decision = accept_times+tR
     time_before_decision[0]-=tR 
     within_horizon = 0.5*(1+np.sign(T-np.cumsum(time_before_decision)))
